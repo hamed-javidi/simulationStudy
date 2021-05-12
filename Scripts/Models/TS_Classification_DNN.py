@@ -38,7 +38,6 @@ def run_main_code(sel, n_runs = 1):
 
     print(classifiers_name[sel] + ' is running ...')
     # Number of Monte-Carlo runs
-    n_runs = 1
     flag = False     # Always False
     seed = 1368
     #======================================================================================================
@@ -157,11 +156,12 @@ if __name__ == "__main__":
         print(f"{i}: {classifiers_name[i]}")
     num = int(input())
     core = input("Which GPU (0 to 7)?")
+    n_runs = input("Number of run?")
     # Select GPU
     os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
     os.environ["CUDA_VISIBLE_DEVICES"] = str(core)
 
     start = time.time()
-    run_main_code(num, n_runs= 1)
+    run_main_code(num, n_runs= int(n_runs))
     print(f"Classifier: {classifiers_name[num]} Elapsed time:  {time.time()-start}")
 #======================================================================================================

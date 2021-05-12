@@ -5,8 +5,8 @@
 #=================================================================================
 #local path
 
-path = "/Volumes/javidih/ChildhoodObesity/Scripts/Models/results/integrated_results/"
-
+setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
+path = paste0(getwd(),'/results/integrated_results/')
 
 print(path)
 setwd(path)

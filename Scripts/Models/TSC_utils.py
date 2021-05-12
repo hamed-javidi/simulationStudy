@@ -29,8 +29,7 @@ def directory_contents(path, flag=0):
         f_dirnames.extend(dirnames)
         f_filenames.extend(filenames)
         break
-
-    f_filenames = [f for f in f_filenames if not f[0] == '.']
+    f_filenames = [f for f in f_filenames if (not f[0] == '.') & (f[-3:] == 'csv')]
     f_dirnames[:] = [d for d in f_dirnames if not d[0] == '.']
 
     if flag == 0:
@@ -104,15 +103,15 @@ def train_test_dataset(dataset, labels, seed, slice_ratio=0.5, shuffle=True):
 
 # ======================================================================================================
 
-def calculate_metrics(y_train, y_train_pred, y_val, y_val_pred, duration, training_itrs, filename):
+def calculate_metrics(y_train, y_train_pred, y_val, y_val_pred, filename, other_metrics):
     # convert the predicted from binary to integer
     y_train = np.argmax(y_train, axis=1)
     y_train_pred = np.argmax(y_train_pred, axis=1)
     y_val = np.argmax(y_val, axis=1)
     y_val_pred = np.argmax(y_val_pred, axis=1)
     report_dict = classification_report(y_val, y_val_pred, output_dict=True)
-    res = pd.DataFrame(data=np.zeros((1, 30), dtype=np.float), index=[0],
-                       columns=['cohort_name', 'accuracy_train', 'precision_train', 'recall_train', 'f1_train',
+    res = pd.DataFrame(data=np.zeros((1, 33), dtype=np.float), index=[0],
+                       columns=['cohort_name', 'AUC', 'decision_threshold', 'acc_thr', 'accuracy_train', 'precision_train', 'recall_train', 'f1_train',
                                 'TP', 'TN', 'FP', 'FN',
                                 '0: precision', '0: recall', '0: f1_score', '0: support',
                                 '1: precision', '1: recall', '1: f1_score', '1: support',
@@ -121,6 +120,11 @@ def calculate_metrics(y_train, y_train_pred, y_val, y_val_pred, duration, traini
                                 'accuracy', 'balanced_accuracy',
                                 'success_rate', 'duration', 'iteration'])
     res['cohort_name'] = filename
+    res['AUC'] = other_metrics[0]
+    res['decision_threshold'] = other_metrics[1]
+    res['acc_thr'] = other_metrics[2]
+    res['duration'] = round(other_metrics[3] / 60, 3)  # in minutes
+    res['iteration'] = other_metrics[4]
     res['accuracy_train'] = accuracy_score(y_train, y_train_pred)
     res['precision_train'] = precision_score(y_train, y_train_pred, average='binary')
     res['recall_train'] = recall_score(y_train, y_train_pred, average='binary')
@@ -155,8 +159,6 @@ def calculate_metrics(y_train, y_train_pred, y_val, y_val_pred, duration, traini
 
     res['balanced_accuracy'] =  balanced_accuracy_score(y_val, y_val_pred)
     res['success_rate'] = 1 if accuracy_score(y_val, y_val_pred) >= 0.99 else 0
-    res['duration'] = round(duration / 60, 3)  # in minutes
-    res['iteration'] = training_itrs  # number of training iterations
     return res
 
 

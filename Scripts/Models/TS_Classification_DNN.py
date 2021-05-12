@@ -16,6 +16,9 @@ from CNN_RNN import *
 from CNN_MLP_Autoencoder import *
 from RNN_Autoencoder import *
 from classifiers_dataset_info import *
+from matplotlib import pyplot as plt
+from sklearn.metrics import roc_curve
+from sklearn.metrics import auc
 
 # List of data sets
 dataset_names = ['mag_cohorts_2021_v2', 'shape_cohorts_2021_v2']
@@ -27,10 +30,7 @@ os.chdir(path)
 
 
 #======================================================================================================
-def run_main_code(sel):
-
-
-
+def run_main_code(sel, n_runs = 1):
     # Data scaling method
     scale = ['normalize', 'normalize', 'min_max', 'normalize', 'normalize', 'normalize', 'normalize',
              'normalize', 'normalize']
@@ -54,11 +54,11 @@ def run_main_code(sel):
             fnames = directory_contents(run_path, 1)
             for fname in fnames:
                 X, y, ID_Class = read_dataset(run_path, fname, dataset_dict, dataset_name, scale = scale[sel])
-                x_train, y_train, x_test, y_test, indexes = train_test_dataset(X, y, seed, slice_ratio = 0.5)
+                x_train, y_train, x_test, y_test, indexes = train_test_dataset(X, y, seed, slice_ratio = 0.7)
                 save_name = dataset_name + '_' + dirs + fname[17:-4]
                 print(run_path + " / " + fname)
                 print(save_name)
-                MC_out = np.empty([0, 3])
+                MC_out = np.empty([0, 5])
                 # Hold model outputs on train and test data sets during Monte Carlo runs
                 out_res_train = np.empty([n_runs, y_train.shape[0], y_train.shape[1]])
                 out_res_test = np.empty([n_runs, y_test.shape[0], y_test.shape[1]])
@@ -99,8 +99,16 @@ def run_main_code(sel):
                                                                                                x_train, y_train, x_test, y_test, nb_classes, run, min_exp_val_loss=0.02)
                     else:
                         sys.exit('Error!')
-                    acc = accuracy_score(np.argmax(y_test, axis=1), np.argmax(y_test_pred, axis=1))
-                    MC_out = np.vstack((MC_out, np.array([acc, duration, training_itrs])))
+
+                    fpr, tpr, thresholds = roc_curve(y_test[:, 1], y_test_pred[:, 1])
+                    # get the best threshold
+                    J = tpr - fpr
+                    ix = np.argmax(J)
+                    best_thresh = thresholds[ix]
+                    my_auc = auc(fpr, tpr)
+                    acc_best = accuracy_score(np.argmax(y_test, axis=1), (y_test_pred[:, 1] >= best_thresh).astype("int"))
+                    MC_out = np.vstack((MC_out, np.array([my_auc, best_thresh, acc_best, duration, training_itrs])))
+
                     out_res_train[run] = y_train_pred
                     out_res_test[run] = y_test_pred
                 median_index = np.argsort(MC_out[:, 0])[len(MC_out[:, 0])//2]
@@ -117,10 +125,8 @@ def run_main_code(sel):
                         # Load results of median model
                         y_test_pred = out_res_test[median_index]
                         y_train_pred = out_res_train[median_index]
-                        duration = MC_out[median_index, 1]
-                        training_itrs = MC_out[median_index, 2]
                         cohort_path_name = '/' + dataset_name + '/' + dirs + '/' + fname
-                        METRICS = calculate_metrics(y_train, y_train_pred, y_test, y_test_pred, duration, training_itrs, save_name)
+                        METRICS = calculate_metrics(y_train, y_train_pred, y_test, y_test_pred, save_name, MC_out[median_index, :])
                         OUTPUTS = prepare_outputs(y_train, y_train_pred, y_test, y_test_pred, duration, training_itrs,
                                                   indexes, ID_Class, seed, cohort_path_name, classifiers_name[sel],
                                                   dataset_name, dataset_dict) # method_dict,
@@ -156,6 +162,6 @@ if __name__ == "__main__":
     os.environ["CUDA_VISIBLE_DEVICES"] = str(core)
 
     start = time.time()
-    run_main_code(num)
+    run_main_code(num, n_runs= 1)
     print(f"Classifier: {classifiers_name[num]} Elapsed time:  {time.time()-start}")
 #======================================================================================================

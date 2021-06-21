@@ -1,4 +1,4 @@
-# Fully CNN Classifier
+# ResNet Classifier
 import numpy as np 
 import pandas as pd 
 import time
@@ -13,9 +13,11 @@ from tensorflow.keras import models
 from tensorflow.keras import callbacks
 from manual_early_stop import TerminateOnBaseline
 tf.keras.backend.clear_session()
+from sklearn.metrics import mean_squared_error,mean_absolute_error
+from math import sqrt
 #======================================================================================================
 
-def ResNet_classifier(save_path, filename, x_train, y_train, x_val, y_val, nb_classes, run, verbose=False, min_exp_val_loss=0.005):
+def ResNet_classifier(save_path, filename, x_train, y_train, x_val, y_val, x_test, y_test, nb_classes, run, verbose=False, min_exp_val_loss=0.005):
         np.random.seed()
         batch_size = 50
         nb_epochs = 500
@@ -81,9 +83,17 @@ def ResNet_classifier(save_path, filename, x_train, y_train, x_val, y_val, nb_cl
         print("Elapsed Training Time: %f" % (duration))
         model = models.load_model(file_path)
         y_val_pred = model.predict(x_val)
+        y_test_pred = model.predict(x_test)
         y_train_pred = model.predict(x_train)
         training_itrs = len(hist.history['loss'])
         hist_df = pd.DataFrame(hist.history)
         hist_df.to_csv(save_path + 'models/' + filename + '_ResNet_history_run_' + str(run) + '.csv', index=False)
         keras.backend.clear_session()
-        return y_train_pred, y_val_pred, duration, training_itrs  # y_train, y_val, hist
+
+        if verbose == 1:
+                val_perf = mean_absolute_error(y_val, y_val_pred), sqrt(mean_squared_error(y_val, y_val_pred))
+                test_perf = mean_absolute_error(y_test, y_test_pred), sqrt(mean_squared_error(y_test, y_test_pred))
+                print(f'MAE= {abs(val_perf[0] - test_perf[0]) < 0.01}, val: {val_perf[0]}, test: {test_perf[0]}')
+                print(f'RMSE= {abs(val_perf[1] - test_perf[1]) < 0.01}, val: {val_perf[1]}, test: {test_perf[1]}')
+
+        return y_train_pred, y_val_pred, y_test_pred, duration, training_itrs

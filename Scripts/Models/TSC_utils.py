@@ -6,10 +6,13 @@ from tensorflow.keras.utils import to_categorical
 from sklearn.metrics import accuracy_score
 from sklearn.metrics import precision_score
 from sklearn.metrics import recall_score
+from sklearn.metrics import auc
+
 from sklearn.metrics import f1_score
 from sklearn.metrics import balanced_accuracy_score
 from sklearn.metrics import confusion_matrix
 from sklearn.metrics import classification_report
+from sklearn.metrics import precision_recall_curve
 from numpy import random
 import matplotlib.pyplot as plt
 
@@ -29,6 +32,7 @@ def directory_contents(path, flag=0):
         f_dirnames.extend(dirnames)
         f_filenames.extend(filenames)
         break
+
     f_filenames = [f for f in f_filenames if (not f[0] == '.') & (f[-3:] == 'csv')]
     f_dirnames[:] = [d for d in f_dirnames if not d[0] == '.']
 
@@ -37,6 +41,7 @@ def directory_contents(path, flag=0):
     if flag == 1:
         return sorted(f_filenames)
     # ======================================================================================================
+
 
 def FillNAs(data):
     d = pd.DataFrame(data)
@@ -58,11 +63,11 @@ def read_dataset(path_dir, filename, dataset_dict, dataset_name, scale='normaliz
     y = np.empty((sample_size, n_class), dtype=int)
     ID = ["" for x in range(sample_size)]
     original_class = ["" for x in range(sample_size)]
-    for i in range(sample_size):
-        slice= data.BMI[i * ts_l: (i + 1) * ts_l]
-        if slice.isna().sum() > 0:
-            data.BMI[i * ts_l: (i + 1) * ts_l] = FillNAs(slice)
-        X[i, :, 0] =slice
+    # for i in range(sample_size):
+    #     slice= data.BMI[i * ts_l: (i + 1) * ts_l]
+    #     if slice.isna().sum() > 0:
+    #         data.BMI[i * ts_l: (i + 1) * ts_l] = FillNAs(slice)
+    #     X[i, :, 0] =slice
     if scale == 'normalize':
         mean = np.mean(data.BMI, axis=0)
         std = np.std(data.BMI, axis=0)
@@ -76,7 +81,10 @@ def read_dataset(path_dir, filename, dataset_dict, dataset_name, scale='normaliz
         data.BMI = np.where(data.BMI >= 1., 1., data.BMI)
         data.BMI = np.where(data.BMI <= -1., -1., data.BMI)
     for i in range(sample_size):
-        X[i, :, 0] = data.BMI[i * ts_l: (i + 1) * ts_l]
+        slice = data.BMI[i * ts_l: (i + 1) * ts_l]
+        if slice.isna().sum() > 0:
+            data.BMI[i * ts_l: (i + 1) * ts_l] = FillNAs(slice)
+        X[i, 0:ts_l, 0] = slice
         h = np.where(class_labels == data.Class[i * ts_l])
         y[i,] = to_categorical(h[0], n_class)
         ID[i] = data.ID[i * ts_l]
@@ -93,25 +101,35 @@ def train_test_dataset(dataset, labels, seed, slice_ratio=0.5, shuffle=True):
         # Fix random seed for reproducibility
         np.random.seed(seed)
         np.random.shuffle(indexes)
-    n_sample_train = int(np.round(len(dataset) * slice_ratio))
+    n_sample_train = int(np.round(len(dataset) * slice_ratio[0]))
+    n_sample_val = int(np.round(len(dataset) * (slice_ratio[0] + slice_ratio[1])))
+
     train_X = dataset[indexes[:n_sample_train]]
     train_Y = labels[indexes[:n_sample_train]]
-    test_X = dataset[indexes[n_sample_train:]]
-    test_Y = labels[indexes[n_sample_train:]]
-    return train_X, train_Y, test_X, test_Y, indexes
+
+    val_X = dataset[indexes[n_sample_train:n_sample_val]]
+    val_Y = labels[indexes[n_sample_train:n_sample_val]]
+
+    test_X = dataset[indexes[n_sample_val:]]
+    test_Y = labels[indexes[n_sample_val:]]
+    return train_X, train_Y, val_X, val_Y, test_X, test_Y, indexes
 
 
 # ======================================================================================================
 
 def calculate_metrics(y_train, y_train_pred, y_val, y_val_pred, filename, other_metrics):
     # convert the predicted from binary to integer
+    best_thresh = other_metrics[1]
     y_train = np.argmax(y_train, axis=1)
-    y_train_pred = np.argmax(y_train_pred, axis=1)
+    # y_train_pred = np.argmax(y_train_pred, axis=1)
+    y_train_pred = (y_train_pred[:, 1] >= best_thresh).astype("int")
     y_val = np.argmax(y_val, axis=1)
-    y_val_pred = np.argmax(y_val_pred, axis=1)
+    # y_val_pred = np.argmax(y_val_pred, axis=1)
+    y_val_pred = (y_val_pred[:, 1] >= best_thresh).astype("int")
     report_dict = classification_report(y_val, y_val_pred, output_dict=True)
-    res = pd.DataFrame(data=np.zeros((1, 33), dtype=np.float), index=[0],
-                       columns=['cohort_name', 'AUC', 'decision_threshold', 'acc_thr', 'accuracy_train', 'precision_train', 'recall_train', 'f1_train',
+    res = pd.DataFrame(data=np.zeros((1, 34), dtype=np.float), index=[0],
+                       columns=['cohort_name', 'AUROC', 'AUPRC', 'decision_threshold', 'acc_thr', 'accuracy_train', 'precision_train', 'recall_train',
+                                 'f1_train',
                                 'TP', 'TN', 'FP', 'FN',
                                 '0: precision', '0: recall', '0: f1_score', '0: support',
                                 '1: precision', '1: recall', '1: f1_score', '1: support',
@@ -119,8 +137,10 @@ def calculate_metrics(y_train, y_train_pred, y_val, y_val_pred, filename, other_
                                 'weighted-avg: precision', 'weighted-avg: recall', 'weighted-avg: f1_score', 'weighted-avg: support',
                                 'accuracy', 'balanced_accuracy',
                                 'success_rate', 'duration', 'iteration'])
+
     res['cohort_name'] = filename
-    res['AUC'] = other_metrics[0]
+    res['AUROC'] = other_metrics[0]
+    # res['AUPRC'] = average_precision_score(y_val, y_val_pred)
     res['decision_threshold'] = other_metrics[1]
     res['acc_thr'] = other_metrics[2]
     res['duration'] = round(other_metrics[3] / 60, 3)  # in minutes
@@ -134,12 +154,12 @@ def calculate_metrics(y_train, y_train_pred, y_val, y_val_pred, filename, other_
     res['TN'] = tn
     res['FP'] = fp
     res['FN'] = fn
-    res['accuracy'] = report_dict['accuracy']  #accuracy_score(y_val, y_val_pred)
+    res['accuracy'] = report_dict['accuracy']  # accuracy_score(y_val, y_val_pred)
     res['Specificity'] = tn / (tn + fp)
 
-    res['0: precision'] = report_dict['0']['precision'] #precision_score(y_val, y_val_pred, average='binary')
-    res['0: recall'] = report_dict['0']['recall'] #recall_score(y_val, y_val_pred, average='binary')
-    res['0: f1_score'] = report_dict['0']['f1-score'] #f1_score(y_val, y_val_pred, average='binary')
+    res['0: precision'] = report_dict['0']['precision']  # precision_score(y_val, y_val_pred, average='binary')
+    res['0: recall'] = report_dict['0']['recall']  # recall_score(y_val, y_val_pred, average='binary')
+    res['0: f1_score'] = report_dict['0']['f1-score']  # f1_score(y_val, y_val_pred, average='binary')
     res['0: support'] = report_dict['0']['support']
 
     res['1: precision'] = report_dict['1']['precision']
@@ -157,7 +177,11 @@ def calculate_metrics(y_train, y_train_pred, y_val, y_val_pred, filename, other_
     res['weighted-avg: f1_score'] = report_dict['weighted avg']['f1-score']
     res['weighted-avg: support'] = report_dict['weighted avg']['support']
 
-    res['balanced_accuracy'] =  balanced_accuracy_score(y_val, y_val_pred)
+    # AUPRC calculation
+    precision, recall, thresholds = precision_recall_curve(y_val, y_val_pred)
+    res['AUPRC'] = auc(recall, precision )
+
+    res['balanced_accuracy'] = balanced_accuracy_score(y_val, y_val_pred)
     res['success_rate'] = 1 if accuracy_score(y_val, y_val_pred) >= 0.99 else 0
     return res
 

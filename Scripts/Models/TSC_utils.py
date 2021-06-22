@@ -119,7 +119,7 @@ def train_test_dataset(dataset, labels, seed, slice_ratio=0.5, shuffle=True):
 
 def calculate_metrics(y_train, y_train_pred, y_val, y_val_pred, filename, other_metrics):
     # convert the predicted from binary to integer
-    best_thresh = other_metrics[1]
+    best_thresh = other_metrics['best_thresh']
     y_train = np.argmax(y_train, axis=1)
     # y_train_pred = np.argmax(y_train_pred, axis=1)
     y_train_pred = (y_train_pred[:, 1] >= best_thresh).astype("int")
@@ -128,7 +128,7 @@ def calculate_metrics(y_train, y_train_pred, y_val, y_val_pred, filename, other_
     y_val_pred = (y_val_pred[:, 1] >= best_thresh).astype("int")
     report_dict = classification_report(y_val, y_val_pred, output_dict=True)
     res = pd.DataFrame(data=np.zeros((1, 34), dtype=np.float), index=[0],
-                       columns=['cohort_name', 'AUROC', 'AUPRC', 'decision_threshold', 'acc_thr', 'accuracy_train', 'precision_train', 'recall_train',
+                       columns=['cohort_name', 'AUC','AUC_train', 'AUPRC', 'decision_threshold', 'acc_thr', 'accuracy_train', 'precision_train', 'recall_train',
                                  'f1_train',
                                 'TP', 'TN', 'FP', 'FN',
                                 '0: precision', '0: recall', '0: f1_score', '0: support',
@@ -139,12 +139,13 @@ def calculate_metrics(y_train, y_train_pred, y_val, y_val_pred, filename, other_
                                 'success_rate', 'duration', 'iteration'])
 
     res['cohort_name'] = filename
-    res['AUROC'] = other_metrics[0]
+    res['AUC_train'] = other_metrics['train_AUC']
+    res['AUC'] = other_metrics['test_AUC']
     # res['AUPRC'] = average_precision_score(y_val, y_val_pred)
-    res['decision_threshold'] = other_metrics[1]
-    res['acc_thr'] = other_metrics[2]
-    res['duration'] = round(other_metrics[3] / 60, 3)  # in minutes
-    res['iteration'] = other_metrics[4]
+    res['decision_threshold'] = other_metrics['best_thresh']
+    res['acc_thr'] = other_metrics['acc_best']
+    res['duration'] = round(other_metrics['duration'] / 60, 3)  # in minutes
+    res['iteration'] = other_metrics['training_itrs']
     res['accuracy_train'] = accuracy_score(y_train, y_train_pred)
     res['precision_train'] = precision_score(y_train, y_train_pred, average='binary')
     res['recall_train'] = recall_score(y_train, y_train_pred, average='binary')

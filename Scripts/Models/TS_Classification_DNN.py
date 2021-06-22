@@ -60,11 +60,11 @@ def run_main_code(sel, n_runs = 1, slice_ratio= [0.7, 0.15, 0.15]):
             fnames = directory_contents(run_path, 1)
             for fname in fnames:
                 X, y, ID_Class = read_dataset(run_path, fname, dataset_dict, dataset_name, scale = scale[sel])
-                x_train, y_train, x_test, y_test, indexes = train_test_dataset(X, y, seed, slice_ratio)
+                x_train, y_train, x_val, y_val, x_test, y_test, indexes = train_test_dataset(X, y, seed, slice_ratio)
                 save_name = dataset_name + '_' + dirs + fname[17:-4]
                 print(run_path + " / " + fname)
                 print(save_name)
-                MC_out = np.empty([0, 5])
+                MC_out = np.empty([0, 6])
                 # Hold model outputs on train and test data sets during Monte Carlo runs
                 out_res_train = np.empty([n_runs, y_train.shape[0], y_train.shape[1]])
                 out_res_val = np.empty([n_runs, y_val.shape[0], y_val.shape[1]])
@@ -131,13 +131,17 @@ def run_main_code(sel, n_runs = 1, slice_ratio= [0.7, 0.15, 0.15]):
                     # Which we can restate as:
                     # J = TruePositiveRate – FalsePositiveRate
                     fpr, tpr, thresholds = roc_curve(y_test[:, 1], y_test_pred[:, 1])
+                    test_AUC = auc(fpr, tpr)
                     # get the best threshold
                     J = tpr - fpr
                     ix = np.argmax(J)
                     best_thresh = thresholds[ix]
-                    my_auc = auc(fpr, tpr)
+
+                    fpr, tpr, thresholds = roc_curve(y_train[:, 1], y_train_pred[:, 1])
+                    train_AUC = auc(fpr, tpr)
+
                     acc_best = accuracy_score(np.argmax(y_test, axis=1), (y_test_pred[:, 1] >= best_thresh).astype("int"))
-                    MC_out = np.vstack((MC_out, np.array([my_auc, best_thresh, acc_best, duration, training_itrs])))
+                    MC_out = np.vstack((MC_out, np.array([train_AUC, test_AUC, best_thresh, acc_best, duration, training_itrs])))
 
                     out_res_train[run] = y_train_pred
                     out_res_val[run] = y_val_pred
@@ -145,6 +149,7 @@ def run_main_code(sel, n_runs = 1, slice_ratio= [0.7, 0.15, 0.15]):
                 median_index = np.argsort(MC_out[:, 0])[len(MC_out[:, 0])//2]
                 init_acc_eff = np.vstack((init_acc_eff, np.array([np.mean(MC_out[:, 0]), np.median(MC_out[:, 0]),
                                                                   np.min(MC_out[:, 0]), np.max(MC_out[:, 0])])))
+                MC_out = pd.DataFrame(MC_out, columns=['train_AUC', 'test_AUC', 'best_thresh', 'acc_best', 'duration', 'training_itrs'])
                 for run in range(n_runs):
                     if run == median_index:
                         src = save_path + 'models/' + save_name + '_' + classifiers_name[sel] + '_history_run_' + str(run) + '.csv'
@@ -158,7 +163,7 @@ def run_main_code(sel, n_runs = 1, slice_ratio= [0.7, 0.15, 0.15]):
                         y_test_pred = out_res_test[run]
                         y_train_pred = out_res_train[run]
                         cohort_path_name = '/' + dataset_name + '/' + dirs + '/' + fname
-                        METRICS = calculate_metrics(y_train, y_train_pred, y_test, y_test_pred, save_name, MC_out[run, :])
+                        METRICS = calculate_metrics(y_train, y_train_pred, y_test, y_test_pred, save_name, MC_out.iloc[run, :])
                         df_metrics.append(METRICS)
                         OUTPUTS = prepare_outputs(np.concatenate((y_train, y_val)), np.concatenate((y_train_pred, y_val_pred)), y_test, y_test_pred, duration,
                                                   training_itrs,

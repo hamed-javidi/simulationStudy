@@ -6,7 +6,7 @@ from tensorflow.keras.utils import to_categorical
 from sklearn.metrics import accuracy_score
 from sklearn.metrics import precision_score
 from sklearn.metrics import recall_score
-from sklearn.metrics import auc
+from sklearn.metrics import auc, average_precision_score
 
 from sklearn.metrics import f1_score
 from sklearn.metrics import balanced_accuracy_score
@@ -73,6 +73,8 @@ def read_dataset(path_dir, filename, dataset_dict, dataset_name, scale='normaliz
         std = np.std(data.BMI, axis=0)
         data.BMI -= mean
         data.BMI /= std
+    elif scale == 'normalize0to1':
+        data.BMI =  (data.BMI - np.min(data.BMI, axis=0)) / (np.max(data.BMI, axis=0) - np.min(data.BMI, axis=0))
     elif scale == 'min_max':
         MIN = np.min(data.BMI, axis=0)
         MAX = np.max(data.BMI, axis=0)
@@ -127,7 +129,7 @@ def calculate_metrics(y_train, y_train_pred, y_val, y_val_pred, filename, other_
     # y_val_pred = np.argmax(y_val_pred, axis=1)
     y_val_pred = (y_val_pred[:, 1] >= best_thresh).astype("int")
     report_dict = classification_report(y_val, y_val_pred, output_dict=True)
-    res = pd.DataFrame(data=np.zeros((1, 34), dtype=np.float), index=[0],
+    res = pd.DataFrame(data=np.zeros((1, 35), dtype=np.float), index=[0],
                        columns=['cohort_name', 'AUC','AUC_train', 'AUPRC', 'decision_threshold', 'acc_thr', 'accuracy_train', 'precision_train', 'recall_train',
                                  'f1_train',
                                 'TP', 'TN', 'FP', 'FN',
@@ -179,8 +181,10 @@ def calculate_metrics(y_train, y_train_pred, y_val, y_val_pred, filename, other_
     res['weighted-avg: support'] = report_dict['weighted avg']['support']
 
     # AUPRC calculation
-    precision, recall, thresholds = precision_recall_curve(y_val, y_val_pred)
-    res['AUPRC'] = auc(recall, precision )
+    # precision, recall, thresholds = precision_recall_curve(y_val, y_val_pred)
+    # res['AUPRC'] =auc(recall, precision )
+    # OR :
+    res['AUPRC'] = average_precision_score(y_val, y_val_pred)
 
     res['balanced_accuracy'] = balanced_accuracy_score(y_val, y_val_pred)
     res['success_rate'] = 1 if accuracy_score(y_val, y_val_pred) >= 0.99 else 0

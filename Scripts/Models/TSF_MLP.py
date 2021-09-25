@@ -35,12 +35,12 @@ def TSF_MLP_classifier(save_path, filename, x_train, y_train, x_val, y_val, x_te
         x = layers.Dropout(0.3)(x)
         output_layer = layers.Dense(nb_classes, activation='softmax')(x)
         model = models.Model(inputs=input_layer, outputs=output_layer)
-        model.compile(loss='categorical_crossentropy', optimizer=keras.optimizers.Adadelta(),metrics=['acc'])
+        model.compile(loss='categorical_crossentropy', optimizer=keras.optimizers.Adam(),metrics=['acc'])
         if(verbose==True):
                 model.summary()
         early_stop = callbacks.EarlyStopping(monitor='val_loss', min_delta=min_exp_val_loss, patience=15)
         baseline_stop = TerminateOnBaseline(monitor='val_acc', baseline=1.0, patience=15)
-        reduce_lr = callbacks.ReduceLROnPlateau(monitor='loss', factor=0.92, patience=3, min_lr=0.0001)
+        reduce_lr = callbacks.ReduceLROnPlateau(monitor='loss', factor=0.92, patience=5, min_lr=0.0001)
         file_path = save_path + 'models/' + filename + '_TSF_MLP_best_model_run_' + str(run) + '.hdf5'
         model_checkpoint = callbacks.ModelCheckpoint(filepath=file_path, monitor='val_loss', save_best_only=True)
         mini_batch_size = int(min(x_train.shape[0]/10, batch_size))

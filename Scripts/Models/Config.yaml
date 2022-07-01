@@ -1,0 +1,28 @@
+
+authorName: Hamed
+experimentName: childhoodobesity
+
+searchSpaceFile: search_space.json           # Specify the Search Space file path
+useAnnotation: false                         # If it is true, searchSpaceFile will be ignore. default: false
+
+trial:
+  command: python3.7 TS_Classification_DNN.py                   # NOTE: change "python3" to "python" if you are using Windows
+  codeDir: .                                 # Specify the Trial file path
+  gpuNum: 1                                  # Each trial needs 1 gpu
+trialConcurrency: 30                         # Run 30 trials concurrently
+
+maxExperimentDuration: 24h                   # Stop generating all trials after 24 hour
+maxTrialNumber: 1000                         # Generate at most 1000 trials
+
+tuner:                                       # Configure the tuning algorithm
+  builtinTunerName: Random
+  classArgs:                                 # Algorithm specific arguments
+    optimize_mode: maximize                  # maximize or minimize the needed metrics
+
+trainingService:                             # Configure the training platform
+  platform: local                            # Include local, remote, pai, etc.
+  gpuIndices: 0, 1                           # The gpu-id 2 and 3 will be used
+  useActiveGpu: True                         # Whether to use the gpu that has been used by other processes.
+  maxTrialNumberPerGpu: 15
+
+logDir: ./log
